@@ -26,6 +26,7 @@ int videoStreamIndex_ = 0;
 
 std::string input;
 std::string output;
+std::string channel_num;
 
 // tmp
 inline int mkdir_p(const char *path, mode_t mode) {
@@ -106,8 +107,13 @@ int initFile() {
   audio_stream->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
   audio_stream->codecpar->sample_rate = 48000;
 
-  // OPT: parse OPUS stream to get channel number
-  audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_MONO;
+  assert(channel_num == "1" || channel_num == "2");
+
+  if (channel_num == "1") {
+    audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_MONO;
+  } else {
+    audio_stream->codecpar->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+  }
 
   audioStreamIndex_ = audio_stream->index;
   tylog("audio stream index=%d.", audioStreamIndex_);
@@ -181,27 +187,28 @@ int main(int argc, char **argv) {
   int opt;
 
   // Loop through the arguments and process them using getopt.
-  while ((opt = getopt(argc, argv, "i:o:")) != -1) {
+  while ((opt = getopt(argc, argv, "c:i:o:")) != -1) {
     switch (opt) {
+      case 'c':
+        channel_num = optarg;
+        break;
       case 'i':
         input = optarg;
         break;
       case 'o':
         output = optarg;
         break;
-      case '?':  // Option not recognized or missing argument
-        if (optopt == 'i' || optopt == 'o') {
-          std::cerr << "Option -" << char(optopt) << " requires an argument."
-                    << std::endl;
-        } else {
-          std::cerr << "Unknown option: -" << char(optopt) << std::endl;
-        }
-        return 1;
       default:
-        std::cerr << "Usage: " << argv[0] << " -i <input> -o <output>"
-                  << std::endl;
+        std::cerr << "Usage: " << argv[0]
+                  << " -c <channel> -i <input> -o <output>" << std::endl;
         return 1;
     }
+  }
+
+  if (input.empty() || output.empty() || channel_num.empty()) {
+    std::cerr << "Usage: " << argv[0] << " -c <channel> -i <input> -o <output>"
+              << std::endl;
+    return 2;
   }
 
   std::ifstream ifs(input);
@@ -227,6 +234,8 @@ int main(int argc, char **argv) {
                   false);
     pts += 20;
   }
+
+  tylog("all time second=%.2f, frame number=%d.", pts / 1000.0, pts / 20);
 
   av_write_trailer(uplinkFileCtx_);
   avio_close(uplinkFileCtx_->pb);
